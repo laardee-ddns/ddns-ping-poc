@@ -1,0 +1,21 @@
+{
+  "name": "ddns-ping-poc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "dependencies": {
+    "serverless-plugin-custom-roles": "^1.0.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.205.0",
+    "uuid": "^3.2.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT"
+}
