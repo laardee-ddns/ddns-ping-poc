@@ -28,7 +28,7 @@ provider:
             - Ref: AWS::Region
             - ":"
             - Ref: AWS::AccountId
-            - ":table/${self:provider.environment.RECORDS_TABLE_NAME}:*"
+            - ":table/${self:provider.environment.RECORDS_TABLE_NAME}/*"
 
 plugins:
   - serverless-plugin-custom-roles
@@ -42,7 +42,14 @@ functions:
           method: get
   record:
     handler: src/handlers/record/index.handler
-
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - RecordsTable
+              - StreamArn
+          batchSize: 1
 resources:
   Resources:
     RecordsTable:
@@ -73,4 +80,6 @@ resources:
         TimeToLiveSpecification:
           AttributeName: expires
           Enabled: true
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
         TableName: ${self:provider.environment.RECORDS_TABLE_NAME}

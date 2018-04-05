@@ -15,7 +15,7 @@ module.exports.handler = async (event, context, callback) => {
     },
     ExpressionAttributeValues: {
       ':ip': event.requestContext.identity.sourceIp,
-      ':requestTime': (new Date(event.requestContext.requestTimeEpoch)).toISOString(),
+      ':requestTime': event.requestContext.requestTimeEpoch,
     }
   };
   let updated = false;
