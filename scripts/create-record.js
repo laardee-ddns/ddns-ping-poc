@@ -14,17 +14,31 @@ if (typeof process.argv[2] !== 'string') {
 }
 
 async function createRecord(token, record, user) {
-  return dynamo.put({
+  const exists = await dynamo.query({
     TableName: process.env.RECORDS_TABLE_NAME,
-    Item: {
-      token,
-      expires: Date.now() + (7 * 24 * 60 * 60), // in 7 days if no activity
-      record,
-      user,
-      enabled: true,
-    }
-  }).promise();
+    IndexName: 'record',
+    KeyConditionExpression: '#record = :record',
+    ExpressionAttributeNames: {
+      '#record': 'record'
+    },
+    ExpressionAttributeValues: {
+      ':record': record,
+    },
+  }).promise().then(({ Items }) => Items.length > 0);
+  if (exists === false) {
+    await dynamo.put({
+      TableName: process.env.RECORDS_TABLE_NAME,
+      Item: {
+        token,
+        expires: Date.now() + (7 * 24 * 60 * 60), // in 7 days if no activity
+        record,
+        user,
+        enabled: true,
+      }
+    }).promise();
+    return `${record} created with token ${token}`;
+  }
+  return `${record} already exists`;
 }
-console.log(process.argv[2], token);
 
-createRecord(token, process.argv[2], user);
+createRecord(token, process.argv[2], user).then(console.log);

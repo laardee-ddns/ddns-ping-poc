@@ -1,37 +1,57 @@
-'use strict';
+'use strict'
 
-const AWS = require('aws-sdk');
-const dynamo = new AWS.DynamoDB.DocumentClient({ region: process.env.SERVERLESS_REGION });
+const AWS = require('aws-sdk')
+const dynamo = new AWS.DynamoDB.DocumentClient({ region: process.env.SERVERLESS_REGION })
 
-module.exports.handler = async (event, context, callback) => {
-  const params = {
-    TableName: process.env.RECORDS_TABLE_NAME,
-    Key: { token : event.pathParameters.token },
-    UpdateExpression: 'set #ip=:ip, #requestTime=:requestTime',
-    ConditionExpression: '#ip<>:ip',
-    ExpressionAttributeNames: {
-      '#ip': 'ip',
-      '#requestTime': 'requestTime',
-    },
-    ExpressionAttributeValues: {
-      ':ip': event.requestContext.identity.sourceIp,
-      ':requestTime': event.requestContext.requestTimeEpoch,
-    }
-  };
-  let updated = false;
-  try {
-    await dynamo.update(params).promise();
-    updated = true;
-  } catch (exception) {
-    console.log(exception);
+module.exports.handler = async event => {
+  const exists = await dynamo
+    .get({
+      TableName: process.env.RECORDS_TABLE_NAME,
+      Key: { token: event.pathParameters.token }
+    })
+    .promise()
+    .then(data => typeof data.Item !== 'undefined')
+
+  let response = {
+    statusCode: 404,
+    body: JSON.stringify({ message: 'invalid token' })
   }
+  if (exists === true) {
+    const params = {
+      TableName: process.env.RECORDS_TABLE_NAME,
+      Key: { token: event.pathParameters.token },
+      UpdateExpression: 'set #ip=:ip, #requestTime=:requestTime',
+      ConditionExpression: '#ip<>:ip',
+      Expected: {
+        Exists: '#ip'
+      },
+      ExpressionAttributeNames: {
+        '#ip': 'ip',
+        '#requestTime': 'requestTime'
+      },
+      ExpressionAttributeValues: {
+        ':ip': event.requestContext.identity.sourceIp,
+        ':requestTime': event.requestContext.requestTimeEpoch
+      }
+    }
 
-  console.log({ updated });
+    let updated = false
+    try {
+      const update = await dynamo.update(params).promise()
+      console.log(update)
+      updated = true
+    } catch (exception) {
+      if (exception.code !== '') {
+      }
+      console.log(exception)
+    }
 
-  const response = {
-    statusCode: 200,
-    body: JSON.stringify({message: 'ok'}),
-  };
+    console.log({ updated })
 
-  return callback(null, response);
-};
+    response = {
+      statusCode: 200,
+      body: JSON.stringify({ message: updated ? 'updated' : 'exists' })
+    }
+  }
+  return response
+}
