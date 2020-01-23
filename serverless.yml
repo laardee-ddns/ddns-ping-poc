@@ -5,20 +5,20 @@ provider:
   runtime: nodejs12.x
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
+  endpointType: regional
   environment:
     SERVERLESS_STAGE: ${self:provider.stage}
     SERVERLESS_PROJECT: ${self:service}
     SERVERLESS_REGION: ${self:provider.region}
     RECORDS_TABLE_NAME: records-table-${self:provider.environment.SERVERLESS_STAGE}
     HOSTED_ZONE_NAME: ${env:HOSTED_ZONE_NAME}
-    HOSTED_ZONE_ID:
-      Ref: DDNSHostedZone
+    HOSTED_ZONE_ID: ${env:HOSTED_ZONE_ID}
   iamRoleStatements:
     - Effect: Allow
       Action:
         - route53:ChangeResourceRecordSets
       Resource:
-        - !Sub "arn:aws:route53:::hostedzone/#{DDNSHostedZone}"
+        - !Sub "arn:aws:route53:::hostedzone/${env:HOSTED_ZONE_ID}"
     - Effect: Allow
       Action:
         - dynamodb:*
@@ -41,19 +41,35 @@ functions:
     events:
       - stream:
           type: dynamodb
-          arn:
-            Fn::GetAtt:
-              - RecordsTable
-              - StreamArn
+          arn: !GetAtt RecordsTable.StreamArn
           batchSize: 1
 resources:
   Resources:
-    DDNSHostedZone:
-      Type: AWS::Route53::HostedZone
+    DomainName:
+      Type: "AWS::ApiGateway::DomainName"
       Properties:
-        HostedZoneConfig:
-          Comment: Hosted zone for ddns service
-        Name: ${self:provider.environment.HOSTED_ZONE_NAME}
+        RegionalCertificateArn: ${env:CERTIFICATE_ARN}
+        DomainName: ${self:provider.environment.SERVERLESS_STAGE}.${env:HOSTED_ZONE_NAME}
+        EndpointConfiguration:
+          Types:
+            - REGIONAL
+    DNSRecord:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        HostedZoneName: "${env:HOSTED_ZONE_NAME}."
+        Name: !Sub "#{DomainName}."
+        Type: A
+        AliasTarget:
+          DNSName: !GetAtt DomainName.RegionalDomainName
+          HostedZoneId: !GetAtt DomainName.RegionalHostedZoneId
+    BasePathMapping:
+      Type: AWS::ApiGateway::BasePathMapping
+      DependsOn: DomainName
+      Properties:
+        BasePath: ''
+        DomainName: ${self:provider.environment.SERVERLESS_STAGE}.${env:HOSTED_ZONE_NAME}
+        RestApiId: !Ref ApiGatewayRestApi
+        Stage: ${self:provider.environment.SERVERLESS_STAGE}
     RecordsTable:
       Type: AWS::DynamoDB::Table
       DeletionPolicy: Delete
@@ -68,9 +84,7 @@ resources:
         KeySchema:
           - AttributeName: token
             KeyType: HASH
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
+        BillingMode: PAY_PER_REQUEST
         GlobalSecondaryIndexes:
           - IndexName: user
             KeySchema:
@@ -78,18 +92,12 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 1
-              WriteCapacityUnits: 1
           - IndexName: record
             KeySchema:
               - AttributeName: record
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 1
-              WriteCapacityUnits: 1
         TimeToLiveSpecification:
           AttributeName: expires
           Enabled: true

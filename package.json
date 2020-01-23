@@ -6,9 +6,7 @@
   "directories": {
     "doc": "docs"
   },
-  "dependencies": {
-
-  },
+  "dependencies": {},
   "devDependencies": {
     "aws-sdk": "^2.205.0",
     "serverless-plugin-custom-roles": "^1.0.0",

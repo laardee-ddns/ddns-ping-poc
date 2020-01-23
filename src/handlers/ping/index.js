@@ -4,27 +4,25 @@ const AWS = require('aws-sdk')
 const dynamo = new AWS.DynamoDB.DocumentClient({ region: process.env.SERVERLESS_REGION })
 
 module.exports.handler = async event => {
-  const exists = await dynamo
+  const data = await dynamo
     .get({
       TableName: process.env.RECORDS_TABLE_NAME,
       Key: { token: event.pathParameters.token }
     })
     .promise()
-    .then(data => typeof data.Item !== 'undefined')
+  const exists = typeof data.Item !== 'undefined'
 
   let response = {
     statusCode: 404,
     body: JSON.stringify({ message: 'invalid token' })
   }
+
   if (exists === true) {
     const params = {
       TableName: process.env.RECORDS_TABLE_NAME,
       Key: { token: event.pathParameters.token },
       UpdateExpression: 'set #ip=:ip, #requestTime=:requestTime',
       ConditionExpression: '#ip<>:ip',
-      Expected: {
-        Exists: '#ip'
-      },
       ExpressionAttributeNames: {
         '#ip': 'ip',
         '#requestTime': 'requestTime'
